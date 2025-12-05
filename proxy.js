@@ -13,7 +13,6 @@ const PORT = 3002;
 const TMDB_API_KEY = process.env.TMDB_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_KEY;
 
-// Use Cloudflare DNS
 dns.setServers(["1.1.1.1", "1.0.0.1"]);
 const lookup = util.promisify(dns.lookup);
 const ipCache = new Map();
@@ -35,10 +34,10 @@ const createSecureAgent = (servername) => {
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Safe TMDB Proxy route
+// TMDB Proxy route
 app.use("/api/tmdb", async (req, res) => {
   try {
-    const path = req.path.slice(1); // Remove leading '/'
+    const path = req.path.slice(1);
     const query = req.url.split("?")[1] || "";
     const hostname = "api.themoviedb.org";
     const ip = await resolveWithCloudflare(hostname);
@@ -62,7 +61,7 @@ app.use("/api/tmdb", async (req, res) => {
   }
 });
 
-// ✅ GPT Proxy
+// GPT Proxy
 app.post("/api/gpt", async (req, res) => {
   try {
     const { messages } = req.body;
@@ -93,7 +92,7 @@ app.post("/api/gpt", async (req, res) => {
 
 // Health check route
 app.get("/", (req, res) => {
-  res.send("✅ Pickaflick Backend is running on EC2 + Docker!");
+  res.send("Pickaflick Backend is running on EC2 + Caddy !");
 });
 
 app.listen(PORT, () => {
