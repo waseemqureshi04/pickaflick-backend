@@ -15,7 +15,7 @@ jobs:
 
       - name: Set up SSH
         run: |
-          mkdir -ph ~/.ssh
+          mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
@@ -26,7 +26,7 @@ jobs:
       - name: Create Inventory File
         run: |
           echo "[webserver]" > inventory.ini
-          echo "${{ secrets.SERVER_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_sshZX_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
+          echo "${{ secrets.SERVER_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
 
       - name: Run Ansible Playbook
         run: |
