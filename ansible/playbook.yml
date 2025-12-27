@@ -1,0 +1,82 @@
+---
+- name: Deploy Pickaflick Backend with Podman & Caddy
+  hosts: webserver
+  become: true
+  vars:
+    # 1. Your actual GitHub Repository URL (From your screenshot)
+    repo_url: "https://github.com/waseemqureshi04/pickaflick-backend.git"
+    
+    # 2. The folder where the app will live on the server
+    app_dir: "/var/www/pickaflick"
+    
+    # Note: tmdb_key and openai_key are NOT defined here. 
+    # They will be injected securely from GitHub Secrets/Command Line.
+
+  tasks:
+    - name: Update apt cache and install dependencies
+      apt:
+        update_cache: yes
+        name:
+          - git
+          - podman
+          - debian-keyring
+          - debian-archive-keyring
+          - apt-transport-https
+          - curl
+        state: present
+
+    - name: Install Caddy (Web Server)
+      shell: |
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+        apt-get update
+        apt-get install caddy -y
+      args:
+        creates: /usr/bin/caddy
+
+    - name: Ensure app directory exists
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Clone or Pull the latest code
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
+
+    - name: Build the Podman Image
+      command: podman build -t pickaflick-backend .
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Stop and remove old container (if running)
+      command: podman rm -f pickaflick_container
+      ignore_errors: yes
+
+    - name: Run the new container
+      # This is where we inject the secrets securely into the container environment
+      command: >
+        podman run -d 
+        --name pickaflick_container 
+        -p 3002:3002 
+        -e TMDB_KEY='{{ tmdb_key }}' 
+        -e OPENAI_KEY='{{ openai_key }}' 
+        pickaflick-backend
+
+    - name: Configure Caddy for HTTPS
+      copy:
+        dest: /etc/caddy/Caddyfile
+        content: |
+          pickaflick.live {
+              reverse_proxy localhost:3002
+          }
+      notify: Restart Caddy
+
+  handlers:
+    - name: Restart Caddy
+      service:
+        name: caddy
+        state: restarted

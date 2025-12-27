@@ -14,5 +14,5 @@ COPY . .
 # Expose port
 EXPOSE 3002
 
-# Start the server
-CMD ["node", "proxy.js"]
+# Start the server (Changed from proxy.js to server.js)
+CMD ["node", "server.js"]

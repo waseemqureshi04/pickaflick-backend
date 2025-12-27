@@ -1,0 +1,36 @@
+name: Deploy Pickaflick Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH
+        run: |
+          mkdir -ph ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Install Ansible
+        run: sudo apt-get update && sudo apt-get install -y ansible
+
+      - name: Create Inventory File
+        run: |
+          echo "[webserver]" > inventory.ini
+          echo "${{ secrets.SERVER_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_sshZX_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
+
+      - name: Run Ansible Playbook
+        run: |
+          ansible-playbook -i inventory.ini ansible/playbook.yml \
+            --extra-vars "repo_url='https://github.com/waseemqureshi04/pickaflick-backend.git' \
+            tmdb_key='${{ secrets.TMDB_KEY }}' \
+            openai_key='${{ secrets.OPENAI_KEY }}'"
