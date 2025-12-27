@@ -7,13 +7,50 @@ require("dotenv").config();
 const app = express();
 const PORT = 3002;
 
+// Load keys from environment variables
 const TMDB_API_KEY = process.env.TMDB_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_KEY;
 
-app.use(cors());
+// ==========================================
+// 🔒 SECURITY LAYER 1: STRICT CORS
+// ==========================================
+const allowedOrigins = [
+  "https://pickaflick.live",
+  "https://www.pickaflick.live",
+  "http://localhost:5173", // Local testing
+  "http://localhost:3002"  // Local testing
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      return callback(new Error('🚫 CORS Policy: Access denied from this origin.'), false);
+    }
+    return callback(null, true);
+  }
+}));
+
+// ==========================================
+// 🔒 SECURITY LAYER 2: DIRECT ACCESS BLOCK
+// ==========================================
+// This prevents users from opening the API in a browser tab
+app.use((req, res, next) => {
+  // If a browser tries to load the page (accepts HTML) but has no "Origin" or "Referer"
+  // it means the user typed the URL manually. Block them.
+  if (req.accepts('html') && !req.get('origin') && !req.get('referer')) {
+    return res.status(403).send("<h1>🚫 Access Denied</h1><p>You cannot access this API directly. Please use the <a href='https://pickaflick.live'>Pickaflick Website</a>.</p>");
+  }
+  next();
+});
+
 app.use(bodyParser.json());
 
-// 1. TMDB Proxy route
+// ==========================================
+// 🎬 TMDB PROXY ROUTE
+// ==========================================
 app.use("/api/tmdb", async (req, res) => {
   try {
     const path = req.path.slice(1); 
@@ -36,7 +73,9 @@ app.use("/api/tmdb", async (req, res) => {
   }
 });
 
-// 2. GPT Proxy Route
+// ==========================================
+// 🤖 GPT PROXY ROUTE
+// ==========================================
 app.post("/api/gpt", async (req, res) => {
   try {
     const { messages } = req.body;
@@ -62,7 +101,7 @@ app.post("/api/gpt", async (req, res) => {
   }
 });
 
-// 3. Health check route
+// Health check route
 app.get("/", (req, res) => {
   res.send("Pickaflick Backend is running on EC2 + Podman!");
 });
