@@ -3,14 +3,11 @@
   hosts: webserver
   become: true
   vars:
-    # 1. Your actual GitHub Repository URL (From your screenshot)
+    # 1. Your GitHub Repository
     repo_url: "https://github.com/waseemqureshi04/pickaflick-backend.git"
     
     # 2. The folder where the app will live on the server
     app_dir: "/var/www/pickaflick"
-    
-    # Note: tmdb_key and openai_key are NOT defined here. 
-    # They will be injected securely from GitHub Secrets/Command Line.
 
   tasks:
     - name: Update apt cache and install dependencies
@@ -57,7 +54,7 @@
       ignore_errors: yes
 
     - name: Run the new container
-      # This is where we inject the secrets securely into the container environment
+      # Secrets are injected here from GitHub Actions
       command: >
         podman run -d 
         --name pickaflick_container 
@@ -70,7 +67,7 @@
       copy:
         dest: /etc/caddy/Caddyfile
         content: |
-          pickaflick.live {
+          api.pickaflick.live {
               reverse_proxy localhost:3002
           }
       notify: Restart Caddy
