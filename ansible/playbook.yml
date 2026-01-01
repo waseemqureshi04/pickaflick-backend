@@ -3,16 +3,52 @@
   hosts: webserver
   become: true
   vars:
-    # 1. Your GitHub Repository
     repo_url: "https://github.com/waseemqureshi04/pickaflick-backend.git"
-    
-    # 2. The folder where the app will live on the server
     app_dir: "/var/www/pickaflick"
 
   tasks:
-    - name: Update apt cache and install dependencies
+    # 1. STOP SERVICE: Gracefully stop the background updater so we can take over
+    - name: Stop unattended-upgrades service
+      service:
+        name: unattended-upgrades
+        state: stopped
+      ignore_errors: yes
+
+    # 2. KILL PROCESSES: Use -x (Exact Match) to avoid killing Ansible itself
+    - name: Kill stale apt processes safely
+      shell: |
+        pkill -x apt || true
+        pkill -x apt-get || true
+        pkill -x dpkg || true
+      ignore_errors: yes
+
+    # 3. REMOVE LOCKS: Manually delete the lock files blocking the install
+    - name: Remove lock files
+      shell: |
+        rm -f /var/lib/dpkg/lock-frontend
+        rm -f /var/lib/dpkg/lock
+        rm -f /var/lib/apt/lists/lock
+        rm -f /var/cache/apt/archives/lock
+        dpkg --configure -a
+      ignore_errors: yes
+
+    # 4. UPDATE: Now safe to update (Non-Interactive Mode)
+    - name: Update apt cache and upgrade system
       apt:
         update_cache: yes
+        upgrade: dist
+        force_apt_get: yes
+        dpkg_options: 'force-confold,force-confdef'
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      register: apt_action
+      retries: 10
+      delay: 10
+      until: apt_action is success
+
+    # 5. INSTALL DEPENDENCIES
+    - name: Install dependencies
+      apt:
         name:
           - git
           - podman
@@ -21,15 +57,21 @@
           - apt-transport-https
           - curl
         state: present
+        force_apt_get: yes
+      environment:
+        DEBIAN_FRONTEND: noninteractive
 
+    # 6. INSTALL CADDY
     - name: Install Caddy (Web Server)
       shell: |
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
         apt-get update
         apt-get install caddy -y
       args:
         creates: /usr/bin/caddy
+      environment:
+        DEBIAN_FRONTEND: noninteractive
 
     - name: Ensure app directory exists
       file:
@@ -54,7 +96,6 @@
       ignore_errors: yes
 
     - name: Run the new container
-      # Secrets are injected here from GitHub Actions
       command: >
         podman run -d 
         --name pickaflick_container 
