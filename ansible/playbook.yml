@@ -3,16 +3,26 @@
   hosts: webserver
   become: true
   vars:
-    # 1. Your GitHub Repository
     repo_url: "https://github.com/waseemqureshi04/pickaflick-backend.git"
-    
-    # 2. The folder where the app will live on the server
     app_dir: "/var/www/pickaflick"
 
   tasks:
-    - name: Update apt cache and install dependencies
+    # 1. NEW TASK: Wait for locks, Update Cache, and Upgrade System
+    # This task tries to update. If locked, it waits 30 seconds and tries again (up to 20 times / 10 mins).
+    - name: Update apt cache and upgrade system
       apt:
         update_cache: yes
+        upgrade: dist
+        force_apt_get: yes
+      register: apt_status
+      retries: 20
+      delay: 30
+      until: apt_status is success
+      ignore_errors: yes # Prevents total failure if a specific mirror is down
+
+    # 2. Install Dependencies (Now safe to run because we updated above)
+    - name: Install dependencies
+      apt:
         name:
           - git
           - podman
@@ -21,10 +31,12 @@
           - apt-transport-https
           - curl
         state: present
+        force_apt_get: yes
 
+    # 3. Install Caddy
     - name: Install Caddy (Web Server)
       shell: |
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
         apt-get update
         apt-get install caddy -y
@@ -54,7 +66,6 @@
       ignore_errors: yes
 
     - name: Run the new container
-      # Secrets are injected here from GitHub Actions
       command: >
         podman run -d 
         --name pickaflick_container 
