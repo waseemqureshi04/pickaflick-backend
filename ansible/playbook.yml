@@ -7,20 +7,32 @@
     app_dir: "/var/www/pickaflick"
 
   tasks:
-    # 1. NEW TASK: Wait for locks, Update Cache, and Upgrade System
-    # This task tries to update. If locked, it waits 30 seconds and tries again (up to 20 times / 10 mins).
+    # 1. CLEANUP: Clear any locks from the previous stuck attempt
+    - name: Kill stale apt processes and locks
+      shell: |
+        pkill -f apt || true
+        pkill -f apt-get || true
+        rm -f /var/lib/dpkg/lock-frontend
+        rm -f /var/lib/dpkg/lock
+        rm -f /var/lib/apt/lists/lock
+        dpkg --configure -a
+      ignore_errors: yes
+
+    # 2. UPDATE: Upgrade system silently (Non-Interactive)
     - name: Update apt cache and upgrade system
       apt:
         update_cache: yes
         upgrade: dist
         force_apt_get: yes
-      register: apt_status
-      retries: 20
-      delay: 30
-      until: apt_status is success
-      ignore_errors: yes # Prevents total failure if a specific mirror is down
+        dpkg_options: 'force-confold,force-confdef' # KEEP old config, ACCEPT defaults
+      environment:
+        DEBIAN_FRONTEND: noninteractive # PREVENTS the UI popup
+      register: apt_action
+      retries: 5
+      delay: 10
+      until: apt_action is success
 
-    # 2. Install Dependencies (Now safe to run because we updated above)
+    # 3. INSTALL: Dependencies
     - name: Install dependencies
       apt:
         name:
@@ -32,8 +44,10 @@
           - curl
         state: present
         force_apt_get: yes
+      environment:
+        DEBIAN_FRONTEND: noninteractive
 
-    # 3. Install Caddy
+    # 4. CADDY: Install Web Server
     - name: Install Caddy (Web Server)
       shell: |
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -42,6 +56,8 @@
         apt-get install caddy -y
       args:
         creates: /usr/bin/caddy
+      environment:
+        DEBIAN_FRONTEND: noninteractive
 
     - name: Ensure app directory exists
       file:
