@@ -17,7 +17,6 @@ export default {
 
     // ==========================================
     // 🎬 2. TMDB ROUTE
-    // Path: /api/tmdb/...
     // ==========================================
     if (url.pathname.startsWith("/api/tmdb")) {
       const tmdbPath = url.pathname.replace("/api/tmdb", "");
@@ -27,8 +26,7 @@ export default {
         const tmdbResponse = await fetch(tmdbUrl, {
           method: "GET",
           headers: {
-            // 👇 HARDCODED KEY FOR TESTING 👇
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIyM2ViM2QxYmQyYTg4N2NmYWZkMjQzOTEyZTc3YjAxNSIsIm5iZiI6MTc1MDI0NzAxMy41OTMsInN1YiI6IjY4NTJhNjY1MDFiY2NmMGRhODZhZWVlMSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.GcMyI80nRRMjk6HoYQG6QicZJ6sPa1piSbkQORI-LX8",
+            "Authorization": `Bearer ${env.TMDB_KEY}`, 
             "Content-Type": "application/json",
           },
         });
@@ -43,7 +41,6 @@ export default {
 
     // ==========================================
     // 🤖 3. GPT ROUTE
-    // Path: /api/gpt
     // ==========================================
     if (url.pathname === "/api/gpt" && request.method === "POST") {
       try {
@@ -53,7 +50,7 @@ export default {
         const openaiResponse = await fetch(openaiUrl, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${env.OPENAI_KEY}`, // Leaving this one dynamic for now
+            "Authorization": `Bearer ${env.OPENAI_KEY}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
