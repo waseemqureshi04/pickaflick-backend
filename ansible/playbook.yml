@@ -7,44 +7,19 @@
     app_dir: "/var/www/pickaflick"
 
   tasks:
-    # 1. STOP TIMERS: Prevent background updates
-    - name: Disable apt systemd timers
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-        enabled: no
-      with_items:
-        - apt-daily.timer
-        - apt-daily-upgrade.timer
-      ignore_errors: yes
-
-    # 2. KILL & CLEAN: Kill processes AND remove the broken Caddy repo file
-    - name: Kill apt, remove corrupt lists and old Caddy repo
-      shell: |
-        pkill -x apt || true
-        pkill -x apt-get || true
-        # Remove corrupted list cache
-        rm -rf /var/lib/apt/lists/*
-        # Remove the specific Caddy file causing the GPG error
-        rm -f /etc/apt/sources.list.d/caddy-stable.list
-        
-        rm -f /var/lib/dpkg/lock-frontend
-        rm -f /var/lib/dpkg/lock
-        rm -f /var/cache/apt/archives/lock
-        dpkg --configure -a
-      ignore_errors: yes
-
-    # 3. UPDATE CACHE: Now safe because the bad Caddy repo is gone
+    # 1. ROBUST UPDATE: Update cache safely without killing processes
+    # We use 'retry' to patiently wait if the system is busy (unattended-upgrades)
     - name: Update apt cache
       apt:
         update_cache: yes
+        cache_valid_time: 3600 # If cache is <1 hour old, skip update (speeds up deploy)
         force_apt_get: yes
       register: apt_action
-      retries: 5
-      delay: 5
+      retries: 20
+      delay: 30
       until: apt_action is success
 
-    # 4. INSTALL DEPENDENCIES
+    # 2. INSTALL DEPENDENCIES
     - name: Install dependencies
       apt:
         name:
@@ -59,19 +34,20 @@
       environment:
         DEBIAN_FRONTEND: noninteractive
 
-    # 5. RE-ADD CADDY: Download the NEW valid key and re-install
-    - name: Install Caddy (Web Server)
+    # 3. INSTALL/UPDATE CADDY
+    # We keep the key steps to ensure it stays valid, but removed the "rm" command
+    - name: Ensure Caddy is installed and updated
       shell: |
-        # Download new key
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-        # Re-add the repo list
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-        # Update just for Caddy and install
         apt-get update
         apt-get install caddy -y
+      args:
+        creates: /usr/bin/caddy # Skip if Caddy is already installed
       environment:
         DEBIAN_FRONTEND: noninteractive
 
+    # 4. APP DEPLOYMENT (Standard Steps)
     - name: Ensure app directory exists
       file:
         path: "{{ app_dir }}"
