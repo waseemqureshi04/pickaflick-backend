@@ -1,4 +1,3 @@
-// src/index.js
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -7,12 +6,11 @@ export default {
     // 🛡️ 1. CORS CONFIGURATION
     // ==========================================
     const corsHeaders = {
-      "Access-Control-Allow-Origin": "*", // Or specific domains like "https://pickaflick.live"
+      "Access-Control-Allow-Origin": "*", 
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };
 
-    // Handle Preflight (OPTIONS) requests immediately
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
@@ -22,7 +20,6 @@ export default {
     // Path: /api/tmdb/...
     // ==========================================
     if (url.pathname.startsWith("/api/tmdb")) {
-      // Remove "/api/tmdb" to get the real TMDB path (e.g., /movie/now_playing)
       const tmdbPath = url.pathname.replace("/api/tmdb", "");
       const tmdbUrl = `https://api.themoviedb.org/3${tmdbPath}${url.search}`;
 
@@ -30,7 +27,8 @@ export default {
         const tmdbResponse = await fetch(tmdbUrl, {
           method: "GET",
           headers: {
-            "Authorization": `Bearer ${env.TMDB_KEY}`, // Access env var
+            // 👇 HARDCODED KEY FOR TESTING 👇
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIyM2ViM2QxYmQyYTg4N2NmYWZkMjQzOTEyZTc3YjAxNSIsIm5iZiI6MTc1MDI0NzAxMy41OTMsInN1YiI6IjY4NTJhNjY1MDFiY2NmMGRhODZhZWVlMSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.GcMyI80nRRMjk6HoYQG6QicZJ6sPa1piSbkQORI-LX8",
             "Content-Type": "application/json",
           },
         });
@@ -55,7 +53,7 @@ export default {
         const openaiResponse = await fetch(openaiUrl, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${env.OPENAI_KEY}`,
+            "Authorization": `Bearer ${env.OPENAI_KEY}`, // Leaving this one dynamic for now
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -73,7 +71,6 @@ export default {
       }
     }
 
-    // 404 for unknown routes
     return new Response("Not Found", { status: 404, headers: corsHeaders });
   },
 };
