@@ -71,12 +71,14 @@
       ignore_errors: yes
 
     - name: Run the new container
+      # UPDATED: Added LOCAL_CLIENT_URL to allow localhost access
       command: >
         podman run -d 
         --name pickaflick_container 
         -p 3002:3002 
         -e TMDB_KEY='{{ tmdb_key }}' 
         -e OPENAI_KEY='{{ openai_key }}' 
+        -e LOCAL_CLIENT_URL='http://localhost:3000'
         pickaflick-backend
 
     - name: Configure Caddy for HTTPS

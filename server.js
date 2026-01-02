@@ -12,29 +12,37 @@ const TMDB_API_KEY = process.env.TMDB_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_KEY;
 
 // ==========================================
-// 🔒 SECURITY LAYER 1: STRICT CORS
+// 🛡️ SECURITY LAYER 1: STRICT CORS
 // ==========================================
 const allowedOrigins = [
-  "https://pickaflick.live",
-  "https://www.pickaflick.live",
-  "http://localhost:5173", // Local testing
-  "http://localhost:3002"  // Local testing
+  "https://pickaflick.live",,
+  "http://localhost:5173", // Keep for Vite default
+  "http://localhost:3002"
 ];
+
+// DYNAMICALLY ADD LOCAL URL (From Playbook/Env)
+if (process.env.LOCAL_CLIENT_URL) {
+  allowedOrigins.push(process.env.LOCAL_CLIENT_URL);
+}
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl, or Postman)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) === -1) {
+    // Check if origin is in the allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    } else {
+      console.log("Blocked Origin:", origin); // Log blocked origins for debugging
       return callback(new Error('🚫 CORS Policy: Access denied from this origin.'), false);
     }
-    return callback(null, true);
-  }
+  },
+  credentials: true
 }));
 
 // ==========================================
-// 🔒 SECURITY LAYER 2: DIRECT ACCESS BLOCK
+// 🛡️ SECURITY LAYER 2: DIRECT ACCESS BLOCK
 // ==========================================
 // This prevents users from opening the API in a browser tab
 app.use((req, res, next) => {
@@ -107,4 +115,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
