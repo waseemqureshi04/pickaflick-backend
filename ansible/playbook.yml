@@ -7,46 +7,40 @@
     app_dir: "/var/www/pickaflick"
 
   tasks:
-    # 1. STOP SERVICE: Gracefully stop the background updater so we can take over
-    - name: Stop unattended-upgrades service
-      service:
-        name: unattended-upgrades
+    # 1. STOP TIMERS: This is better than killing processes. It prevents them from starting.
+    - name: Disable apt systemd timers
+      systemd:
+        name: "{{ item }}"
         state: stopped
+        enabled: no
+      with_items:
+        - apt-daily.timer
+        - apt-daily-upgrade.timer
       ignore_errors: yes
 
-    # 2. KILL PROCESSES: Use -x (Exact Match) to avoid killing Ansible itself
-    - name: Kill stale apt processes safely
+    # 2. KILL & CLEAN: Kill any running apt process and DELETE corrupt lists
+    - name: Kill apt and remove corrupt lists
       shell: |
         pkill -x apt || true
         pkill -x apt-get || true
-        pkill -x dpkg || true
-      ignore_errors: yes
-
-    # 3. REMOVE LOCKS: Manually delete the lock files blocking the install
-    - name: Remove lock files
-      shell: |
+        rm -rf /var/lib/apt/lists/* # <--- Crucial fix for "Failed to update cache"
         rm -f /var/lib/dpkg/lock-frontend
         rm -f /var/lib/dpkg/lock
-        rm -f /var/lib/apt/lists/lock
         rm -f /var/cache/apt/archives/lock
         dpkg --configure -a
       ignore_errors: yes
 
-    # 4. UPDATE: Now safe to update (Non-Interactive Mode)
-    - name: Update apt cache and upgrade system
+    # 3. UPDATE CACHE ONLY: We removed 'upgrade: dist' to prevent timeouts.
+    - name: Update apt cache
       apt:
         update_cache: yes
-        upgrade: dist
         force_apt_get: yes
-        dpkg_options: 'force-confold,force-confdef'
-      environment:
-        DEBIAN_FRONTEND: noninteractive
       register: apt_action
-      retries: 10
-      delay: 10
+      retries: 5
+      delay: 5
       until: apt_action is success
 
-    # 5. INSTALL DEPENDENCIES
+    # 4. INSTALL DEPENDENCIES
     - name: Install dependencies
       apt:
         name:
@@ -61,7 +55,7 @@
       environment:
         DEBIAN_FRONTEND: noninteractive
 
-    # 6. INSTALL CADDY
+    # 5. INSTALL CADDY
     - name: Install Caddy (Web Server)
       shell: |
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
