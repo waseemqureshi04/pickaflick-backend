@@ -7,7 +7,7 @@
     app_dir: "/var/www/pickaflick"
 
   tasks:
-    # 1. STOP TIMERS: This is better than killing processes. It prevents them from starting.
+    # 1. STOP TIMERS: Prevent background updates
     - name: Disable apt systemd timers
       systemd:
         name: "{{ item }}"
@@ -18,19 +18,23 @@
         - apt-daily-upgrade.timer
       ignore_errors: yes
 
-    # 2. KILL & CLEAN: Kill any running apt process and DELETE corrupt lists
-    - name: Kill apt and remove corrupt lists
+    # 2. KILL & CLEAN: Kill processes AND remove the broken Caddy repo file
+    - name: Kill apt, remove corrupt lists and old Caddy repo
       shell: |
         pkill -x apt || true
         pkill -x apt-get || true
-        rm -rf /var/lib/apt/lists/* # <--- Crucial fix for "Failed to update cache"
+        # Remove corrupted list cache
+        rm -rf /var/lib/apt/lists/*
+        # Remove the specific Caddy file causing the GPG error
+        rm -f /etc/apt/sources.list.d/caddy-stable.list
+        
         rm -f /var/lib/dpkg/lock-frontend
         rm -f /var/lib/dpkg/lock
         rm -f /var/cache/apt/archives/lock
         dpkg --configure -a
       ignore_errors: yes
 
-    # 3. UPDATE CACHE ONLY: We removed 'upgrade: dist' to prevent timeouts.
+    # 3. UPDATE CACHE: Now safe because the bad Caddy repo is gone
     - name: Update apt cache
       apt:
         update_cache: yes
@@ -55,15 +59,16 @@
       environment:
         DEBIAN_FRONTEND: noninteractive
 
-    # 5. INSTALL CADDY
+    # 5. RE-ADD CADDY: Download the NEW valid key and re-install
     - name: Install Caddy (Web Server)
       shell: |
+        # Download new key
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        # Re-add the repo list
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+        # Update just for Caddy and install
         apt-get update
         apt-get install caddy -y
-      args:
-        creates: /usr/bin/caddy
       environment:
         DEBIAN_FRONTEND: noninteractive
 
